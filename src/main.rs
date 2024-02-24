@@ -1,4 +1,7 @@
 use bevy::prelude::*;
+use bevy::sprite::MaterialMesh2dBundle;
+
+const BALL_SIZE: f32 = 5.;
 
 #[derive(Component)]
 struct Position(Vec2);
@@ -21,21 +24,35 @@ impl BallBundle {
     }
 }
 
+fn spawn_ball(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    println!("Spawning ball...");
+
+    let mesh = Mesh::from(Circle::new(BALL_SIZE));
+    let material = ColorMaterial::from(Color::rgb(1., 0., 0.));
+
+    let mesh_handle = meshes.add(mesh);
+    let material_handle = materials.add(material);
+
+    commands.spawn((
+        BallBundle::new(),
+        MaterialMesh2dBundle {
+            mesh: mesh_handle.into(),
+            material: material_handle,
+            ..default()
+        },
+    ));
+}
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, (spawn_ball, spawn_camera))
         .add_systems(Update, project_positions)
         .run();
-}
-
-fn spawn_ball(mut commands: Commands) {
-    println!("Spawning ball...");
-
-    commands
-        .spawn_empty()
-        .insert(Transform::default())
-        .insert(BallBundle::new());
 }
 
 fn project_positions(mut positionable: Query<(&mut Transform, &Position)>) {
