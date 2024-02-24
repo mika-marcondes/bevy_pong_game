@@ -10,6 +10,15 @@ const PADDLE_HEIGHT: f32 = 50.;
 #[derive(Component)]
 struct Paddle;
 
+#[derive(Component)]
+struct Ball;
+
+#[derive(Component)]
+struct Position(Vec2);
+
+#[derive(Component)]
+struct Velocity(Vec2);
+
 #[derive(Bundle)]
 struct PaddleBundle {
     paddle: Paddle,
@@ -25,22 +34,18 @@ impl PaddleBundle {
     }
 }
 
-#[derive(Component)]
-struct Position(Vec2);
-
-#[derive(Component)]
-struct Ball;
-
 #[derive(Bundle)]
 struct BallBundle {
     ball: Ball,
+    velocity: Velocity,
     position: Position,
 }
 
 impl BallBundle {
-    fn new() -> Self {
+    fn new(x: f32, y: f32) -> Self {
         BallBundle {
             ball: Ball,
+            velocity: Velocity(Vec2::new(x, y)),
             position: Position(Vec2::new(0., 0.)),
         }
     }
@@ -68,7 +73,7 @@ fn spawn_ball(
     let material_handle = materials.add(material);
 
     commands.spawn((
-        BallBundle::new(),
+        BallBundle::new(1., 0.),
         MaterialMesh2dBundle {
             mesh: mesh_handle.into(),
             material: material_handle,
@@ -77,13 +82,13 @@ fn spawn_ball(
     ));
 }
 
-fn move_ball(mut ball: Query<&mut Position, With<Ball>>) {
-    if let Ok(mut position) = ball.get_single_mut() {
-        position.0.x += 1.0
+fn move_ball(mut ball: Query<(&mut Position, &Velocity), With<Ball>>) {
+    if let Ok((mut position, velocity)) = ball.get_single_mut() {
+        position.0 += velocity.0
     }
 }
-fn project_positions(mut positionable: Query<(&mut Transform, &Position)>) {
-    for (mut transform, position) in &mut positionable {
+fn project_positions(mut ball: Query<(&mut Transform, &Position)>) {
+    for (mut transform, position) in &mut ball {
         transform.translation = position.0.extend(0.);
     }
 }
