@@ -1,11 +1,19 @@
-use bevy::prelude::*;
-use bevy::sprite::MaterialMesh2dBundle;
+use bevy::{math::bounding::*, prelude::*, sprite::MaterialMesh2dBundle};
 
 const BALL_SIZE: f32 = 5.;
+const BALL_SPEED: f32 = 5.;
 
 const PADDLE_SPEED: f32 = 1.;
 const PADDLE_WIDTH: f32 = 10.;
 const PADDLE_HEIGHT: f32 = 50.;
+
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .add_systems(Startup, (spawn_ball, spawn_camera, spawn_paddles))
+        .add_systems(Update, (move_ball, project_positions.after(move_ball)))
+        .run();
+}
 
 #[derive(Component)]
 struct Paddle;
@@ -19,9 +27,14 @@ struct Position(Vec2);
 #[derive(Component)]
 struct Velocity(Vec2);
 
+#[derive(Component)]
+struct Shape(Vec2);
+
 #[derive(Bundle)]
 struct PaddleBundle {
     paddle: Paddle,
+    shape: Shape,
+    velocity: Velocity,
     position: Position,
 }
 
@@ -29,6 +42,8 @@ impl PaddleBundle {
     fn new(x: f32, y: f32) -> Self {
         PaddleBundle {
             paddle: Paddle,
+            shape: Shape(Vec2::new(PADDLE_WIDTH, PADDLE_HEIGHT)),
+            velocity: Velocity(Vec2::new(0., 0.)),
             position: Position(Vec2::new(x, y)),
         }
     }
@@ -37,6 +52,7 @@ impl PaddleBundle {
 #[derive(Bundle)]
 struct BallBundle {
     ball: Ball,
+    shape: Shape,
     velocity: Velocity,
     position: Position,
 }
@@ -45,18 +61,11 @@ impl BallBundle {
     fn new(x: f32, y: f32) -> Self {
         BallBundle {
             ball: Ball,
+            shape: Shape(Vec2::new(BALL_SIZE, BALL_SIZE)),
             velocity: Velocity(Vec2::new(x, y)),
             position: Position(Vec2::new(0., 0.)),
         }
     }
-}
-
-fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins)
-        .add_systems(Startup, (spawn_ball, spawn_camera, spawn_paddles))
-        .add_systems(Update, (move_ball, project_positions.after(move_ball)))
-        .run();
 }
 
 fn spawn_ball(
@@ -117,4 +126,16 @@ fn spawn_paddles(
             ..default()
         },
     ));
+}
+
+fn handle_collisions(
+    mut ball: Query<(&mut Velocity, &Position, &Shape), With<Ball>>,
+    other_things: Query<(&Position, &Shape), Without<Ball>>,
+) {
+    if let Ok((mut ball_velocity, ball_position, ball_shape)) = ball.get_single_mut() {
+        for (position, shape) in &other_things {
+            let collision = Aabb2d::new(ball_position.0, ball_shape.0)
+                .intersects(&Aabb2d::new(position.0, shape.0));
+        }
+    }
 }
