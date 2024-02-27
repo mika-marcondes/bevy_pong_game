@@ -11,9 +11,27 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, (spawn_ball, spawn_camera, spawn_paddles))
-        .add_systems(Update, (move_ball, project_positions.after(move_ball)))
+        .add_systems(
+            Update,
+            (
+                move_ball,
+                project_positions.after(move_ball),
+                handle_collisions.after(move_ball),
+            ),
+        )
         .run();
 }
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+enum Collision {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+#[derive(Component)]
+struct Collider;
 
 #[derive(Component)]
 struct Paddle;
@@ -36,6 +54,7 @@ struct PaddleBundle {
     shape: Shape,
     velocity: Velocity,
     position: Position,
+    collider: Collider,
 }
 
 impl PaddleBundle {
@@ -45,6 +64,7 @@ impl PaddleBundle {
             shape: Shape(Vec2::new(PADDLE_WIDTH, PADDLE_HEIGHT)),
             velocity: Velocity(Vec2::new(0., 0.)),
             position: Position(Vec2::new(x, y)),
+            collider: Collider,
         }
     }
 }
@@ -90,7 +110,6 @@ fn spawn_ball(
         },
     ));
 }
-
 fn move_ball(mut ball: Query<(&mut Position, &Velocity), With<Ball>>) {
     if let Ok((mut position, velocity)) = ball.get_single_mut() {
         position.0 += velocity.0
@@ -101,6 +120,7 @@ fn project_positions(mut ball: Query<(&mut Transform, &Position)>) {
         transform.translation = position.0.extend(0.);
     }
 }
+
 fn spawn_camera(mut commands: Commands) {
     commands.spawn_empty().insert(Camera2dBundle::default());
 }
@@ -129,13 +149,58 @@ fn spawn_paddles(
 }
 
 fn handle_collisions(
-    mut ball: Query<(&mut Velocity, &Position, &Shape), With<Ball>>,
-    other_things: Query<(&Position, &Shape), Without<Ball>>,
+    mut ball: Query<(&mut Velocity, &Transform), With<Ball>>,
+    collider: Query<&Transform, With<Collider>>,
 ) {
-    if let Ok((mut ball_velocity, ball_position, ball_shape)) = ball.get_single_mut() {
-        for (position, shape) in &other_things {
-            let collision = Aabb2d::new(ball_position.0, ball_shape.0)
-                .intersects(&Aabb2d::new(position.0, shape.0));
+    if let Ok((mut ball_velocity, ball_transform)) = ball.get_single_mut() {
+        for transform in &collider {
+            let collision = collide_with_side(
+                BoundingCircle::new(ball_transform.translation.truncate(), BALL_SIZE / 2.),
+                Aabb2d::new(
+                    transform.translation.truncate(),
+                    transform.scale.truncate() / 2.,
+                ),
+            );
+
+            if let Some(collision) = collision {
+                println!("Smack that ball!!!11!");
+                match collision {
+                    Collision::Left => {
+                        ball_velocity.0.x *= -1.;
+                    }
+                    Collision::Right => {
+                        ball_velocity.0.x *= -1.;
+                    }
+                    Collision::Top => {
+                        ball_velocity.0.y *= -1.;
+                    }
+                    Collision::Bottom => {
+                        ball_velocity.0.y *= -1.;
+                    }
+                }
+            }
         }
     }
+}
+
+fn collide_with_side(ball: BoundingCircle, paddle: Aabb2d) -> Option<Collision> {
+    if !ball.intersects(&paddle) {
+        return None;
+    }
+
+    let closest = paddle.closest_point(ball.center());
+    let offset = ball.center - closest;
+    let side = if offset.x.abs() > offset.y.abs() {
+        if offset.x < 0. {
+            Collision::Left
+        } else {
+            Collision::Right
+        }
+    } else if offset.y > 0. {
+        Collision::Top
+    } else {
+        Collision::Bottom
+    };
+
+    Some(side)
 }
